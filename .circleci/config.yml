@@ -6,4 +6,6 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker
-      - run: docker build . -t hawkeye-sidecar
+      - run: docker build . -t m0wfo/hawkeye-sidecar:latest
+      - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run: docker push m0wfo/hawkeye-sidecar:latest
