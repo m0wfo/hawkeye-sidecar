@@ -2,9 +2,8 @@ version: 2
 jobs:
   build:
     docker:
-      # specify the version
-      - image: circleci/golang:1.9
+      - image: docker:17.05.0-ce-git
     steps:
       - checkout
-      - run: go get github.com/hpcloud/tail/...
-      - run: go build
+      - setup_remote_docker
+      - run: docker build . -t hawkeye-sidecar
