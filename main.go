@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -13,7 +14,12 @@ import (
 
 func main() {
 	fmt.Println("Sidecar started")
-	tailFile("/Users/chris/Desktop/test.log")
+	// tailFile("/Users/chris/Desktop/test.log")
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "pong")
+	})
+
+	log.Fatal(http.ListenAndServe(":8889", nil))
 }
 
 func tailFile(filename string) {

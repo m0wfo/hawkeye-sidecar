@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hawkeye-sidecar
+spec:
+  selector:
+    matchLabels:
+      app: hawkeye-sidecar
+  template:
+    metadata:
+      labels:
+        app: hawkeye-sidecar
+    spec:
+      containers:
+      - name: hawkeye-sidecar
+        image: m0wfo/hawkeye-sidecar:latest
+        imagePullPolicy: Always
+        resources:
+          limits:
+            memory: 128Gi
+          requests:
+            memory: 32Mi
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 8889
+          initialDelaySeconds: 0
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 8889
+          initialDelaySeconds: 0
+          periodSeconds: 10
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
