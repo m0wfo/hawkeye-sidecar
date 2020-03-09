@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/hpcloud/tail"
 )
 
 func main() {
 	fmt.Println("Sidecar started")
+	tailFile("/Users/chris/Desktop/test.log")
+}
 
+func tailFile(filename string) {
 	conn, err := net.Dial("tcp", "localhost:8080")
 	handleErr(err)
 
@@ -53,7 +57,7 @@ func main() {
 		fmt.Println("came out ok")
 	}
 
-	t, err := tail.TailFile("/Users/chris/Desktop/test.log", tail.Config{Follow: true})
+	t, err := tail.TailFile(filename, tail.Config{Follow: true})
 	for line := range t.Lines {
 		writer.WriteString(line.Text)
 		writer.Flush()
@@ -65,4 +69,10 @@ func handleErr(err error) {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+// need target host
+// need glob bath
+func getEnv(key string) string {
+	return os.Getenv(key)
 }
