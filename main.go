@@ -7,14 +7,27 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/hpcloud/tail"
 )
 
 func main() {
 	fmt.Println("Sidecar started")
-	// tailFile("/Users/chris/Desktop/test.log")
+	pattern := "/var/log/containers/*.log"
+	matches, err := filepath.Glob(pattern)
+	handleErr(err)
+
+	for _, path := range matches {
+		if !strings.Contains(path, "hawkeye-sidecar") {
+			go tailFile(path)
+		}
+	}
+
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "pong")
 	})
@@ -23,16 +36,51 @@ func main() {
 }
 
 func tailFile(filename string) {
-	conn, err := net.Dial("tcp", "localhost:8080")
-	handleErr(err)
-
+	log.Print("Starting to tail " + filename)
+	conn, writer := initiateConnection(filename)
+	for {
+		if writer != nil {
+			break
+		}
+		log.Print("retrying connection in 5 seconds")
+		time.Sleep(5 * time.Second)
+		conn, writer = initiateConnection(filename)
+	}
 	defer conn.Close()
+	shouldRetry := false
+	t, err := tail.TailFile(filename, tail.Config{Follow: true})
+	handleErr(err)
+	for line := range t.Lines {
 
-	req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		written, err := writer.WriteString(line.Text + "\n")
+		if written < len(line.Text) || err != nil {
+			log.Print("Connection closed")
+			shouldRetry = true
+			break
+		}
+		writer.Flush()
+	}
+	if shouldRetry {
+		log.Print("Retrying connection for " + filename)
+		tailFile(filename)
+	}
+}
+
+func initiateConnection(filename string) (net.Conn, *bufio.Writer) {
+	hawkeyeTarget := getHawkeyeTarget()
+	conn, err := net.Dial("tcp", hawkeyeTarget.Host)
+
+	if err != nil {
+		log.Print("error connecting to " + hawkeyeTarget.Host)
+		return nil, nil
+	}
+
+	req, err := http.NewRequest("GET", getHawkeyeTarget().String(), nil)
 	handleErr(err)
 
 	req.Header.Add("Connection", "Upgrade")
 	req.Header.Add("Upgrade", "hawkeye/1.0.0alpha1")
+	req.Header.Add("User-Agent", "hawkeye/client-go1.0.0alpha1")
 
 	handleErr(err)
 
@@ -43,7 +91,10 @@ func tailFile(filename string) {
 	handleErr(err)
 	writer.Flush()
 
-	resp, err := http.ReadResponse(reader, &http.Request{Method: "GET"})
+	resp, err := http.ReadResponse(reader, req)
+	if resp.StatusCode != 101 {
+		log.Fatal("Couldn't upgrade HTTP connection, closing. Got status: " + resp.Status)
+	}
 	handleErr(err)
 
 	fmt.Println(resp.Status)
@@ -51,7 +102,7 @@ func tailFile(filename string) {
 	controlMessage := make(map[string]string)
 	encoder := json.NewEncoder(writer)
 
-	controlMessage["__hawkeye_filename"] = "/var/log/foo.test"
+	controlMessage["__hawkeye_filename"] = filename
 
 	err = encoder.Encode(controlMessage)
 	handleErr(err)
@@ -60,25 +111,23 @@ func tailFile(filename string) {
 	ok, err := reader.ReadString('\n')
 	handleErr(err)
 	if ok == "OK\n" {
-		fmt.Println("came out ok")
+		log.Print("handshake successful")
 	}
+	return conn, writer
+}
 
-	t, err := tail.TailFile(filename, tail.Config{Follow: true})
-	for line := range t.Lines {
-		writer.WriteString(line.Text)
-		writer.Flush()
-		fmt.Println(line.Text)
+func getHawkeyeTarget() *url.URL {
+	rawURL := os.Getenv("HAWKEYE_TARGET")
+	if rawURL == "" {
+		log.Fatal("no HAWKEYE_TARGET host specified")
 	}
+	u, e := url.Parse(rawURL)
+	handleErr(e)
+	return u
 }
 
 func handleErr(err error) {
 	if err != nil {
-		fmt.Println(err)
+		log.Panic(err)
 	}
-}
-
-// need target host
-// need glob bath
-func getEnv(key string) string {
-	return os.Getenv(key)
 }
