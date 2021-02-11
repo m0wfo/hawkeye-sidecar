@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-collector
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+    spec:
+      containers:
+      - name: hawkeye-sidecar
+        image: tuplestream/hawkeye-sidecar:latest
+        env:
+          - name: TUPLESTREAM_AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: collector-auth-token
+                key: token
+          - name: TUPLESTREAM_HAWKEYE_TARGET
+            value: http://host.docker.internal:8080
+        resources:
+          limits:
+            memory: 128Mi
+          requests:
+            memory: 32Mi
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 8889
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
