@@ -1,20 +1,19 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/hpcloud/tail"
+	"github.com/tuplestream/hawkeye-client"
 )
+
+var authToken = os.Getenv("TUPLESTREAM_AUTH_TOKEN")
 
 func main() {
 	fmt.Println("Sidecar started")
@@ -37,14 +36,14 @@ func main() {
 
 func tailFile(filename string) {
 	log.Print("Starting to tail " + filename)
-	conn, writer := initiateConnection(filename)
+	conn, writer := hawkeye.InitiateConnection(filename, authToken)
 	for {
 		if writer != nil {
 			break
 		}
 		log.Print("retrying connection in 5 seconds")
 		time.Sleep(5 * time.Second)
-		conn, writer = initiateConnection(filename)
+		conn, writer = hawkeye.InitiateConnection(filename, authToken)
 	}
 	defer conn.Close()
 	shouldRetry := false
@@ -64,66 +63,6 @@ func tailFile(filename string) {
 		log.Print("Retrying connection for " + filename)
 		tailFile(filename)
 	}
-}
-
-func initiateConnection(filename string) (net.Conn, *bufio.Writer) {
-	hawkeyeTarget := getHawkeyeTarget()
-	conn, err := net.Dial("tcp", hawkeyeTarget.Host)
-
-	if err != nil {
-		log.Print("error connecting to " + hawkeyeTarget.Host)
-		return nil, nil
-	}
-
-	req, err := http.NewRequest("GET", getHawkeyeTarget().String(), nil)
-	handleErr(err)
-
-	req.Header.Add("Connection", "Upgrade")
-	req.Header.Add("Upgrade", "hawkeye/1.0.0alpha1")
-	req.Header.Add("User-Agent", "hawkeye/client-go1.0.0alpha1")
-
-	handleErr(err)
-
-	writer := bufio.NewWriter(conn)
-	reader := bufio.NewReader(conn)
-
-	err = req.Write(writer)
-	handleErr(err)
-	writer.Flush()
-
-	resp, err := http.ReadResponse(reader, req)
-	if resp.StatusCode != 101 {
-		log.Fatal("Couldn't upgrade HTTP connection, closing. Got status: " + resp.Status)
-	}
-	handleErr(err)
-
-	fmt.Println(resp.Status)
-
-	controlMessage := make(map[string]string)
-	encoder := json.NewEncoder(writer)
-
-	controlMessage["__hawkeye_filename"] = filename
-
-	err = encoder.Encode(controlMessage)
-	handleErr(err)
-	writer.Flush()
-
-	ok, err := reader.ReadString('\n')
-	handleErr(err)
-	if ok == "OK\n" {
-		log.Print("handshake successful")
-	}
-	return conn, writer
-}
-
-func getHawkeyeTarget() *url.URL {
-	rawURL := os.Getenv("HAWKEYE_TARGET")
-	if rawURL == "" {
-		log.Fatal("no HAWKEYE_TARGET host specified")
-	}
-	u, e := url.Parse(rawURL)
-	handleErr(e)
-	return u
 }
 
 func handleErr(err error) {
