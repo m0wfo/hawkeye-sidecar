@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: hawkeye-sidecar
-        image: tuplestream/hawkeye-sidecar:latest
+        image: tuplestream/collector:latest
         env:
           - name: TUPLESTREAM_AUTH_TOKEN
             valueFrom:
