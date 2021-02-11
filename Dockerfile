@@ -1,14 +1,13 @@
-FROM golang:1.14-buster AS build
+FROM tuplestream/golang:latest AS build
 
-WORKDIR /hawkeye-sidecar
-RUN go get github.com/hpcloud/tail/...
-ADD main.go .
-RUN go build
+WORKDIR /collector
+ADD . .
+RUN ./build.bash -release
 
 FROM debian:stable-slim AS runtime
 
 WORKDIR /runtime
 
-COPY --from=build /hawkeye-sidecar/hawkeye-sidecar .
+COPY --from=build /collector/bin/collector .
 
-CMD [ "/runtime/hawkeye-sidecar" ]
+CMD [ "/runtime/collector" ]
