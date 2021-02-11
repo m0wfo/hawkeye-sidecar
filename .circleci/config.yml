@@ -6,6 +6,6 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker
-      - run: docker build . -t m0wfo/hawkeye-sidecar:latest
+      - run: docker build . -t tuplestream/collector:latest
       - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
-      - run: docker push m0wfo/hawkeye-sidecar:latest
+      - run: docker push tuplestream/collector:latest
